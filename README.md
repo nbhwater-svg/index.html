@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>1分間英語スピーチトレーナー</title>
+    <title>改修版：1分間英語スピーチトレーナー</title>
     <style>
         :root {
             --primary: #1a73e8;
@@ -11,7 +11,7 @@
             --success: #188038;
             --bg: #f8f9fa;
             --card: #ffffff;
-            --text: #202124;
+            --text: #111111; /* 文字色をハッキリとした濃い黒に変更 */
         }
 
         body {
@@ -26,7 +26,7 @@
 
         .container {
             width: 100%;
-            max-width: 500px;
+            max-width: 550px;
             background: var(--card);
             padding: 24px;
             border-radius: 16px;
@@ -36,13 +36,12 @@
         }
 
         h1 {
-            font-size: 20px;
+            font-size: 22px;
             margin-top: 0;
             color: var(--primary);
             margin-bottom: 20px;
         }
 
-        /* タイマーのデザイン */
         .timer-circle {
             width: 140px;
             height: 140px;
@@ -66,7 +65,6 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* 状態表示ラベル */
         .status-badge {
             display: inline-block;
             padding: 6px 12px;
@@ -89,17 +87,17 @@
             100% { opacity: 1; }
         }
 
-        /* ボタン */
         .btn {
             width: 100%;
-            padding: 14px;
-            font-size: 16px;
+            padding: 16px;
+            font-size: 18px;
             font-weight: bold;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             margin-bottom: 12px;
             transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .btn:active { transform: scale(0.98); }
@@ -110,7 +108,6 @@
         .btn-stop { background-color: var(--accent); color: white; display: none; }
         .btn-stop:hover { background-color: #b31412; }
 
-        /* オーディオプレイヤー */
         .audio-section {
             margin-top: 20px;
             padding-top: 20px;
@@ -127,43 +124,44 @@
 
         audio { width: 100%; margin-bottom: 10px; }
 
-        /* 文字起こし結果のエリア */
         .transcript-section {
             margin-top: 20px;
             text-align: left;
         }
 
         .transcript-section h3 {
-            font-size: 15px;
+            font-size: 16px;
             margin: 0 0 10px;
             color: #5f6368;
         }
 
+        /* 文字表示エリアの改善（見やすさ重視） */
         .transcript-box {
             width: 100%;
-            min-height: 100px;
-            max-height: 200px;
+            height: 240px; /* ボックスを広げて見やすく */
             overflow-y: auto;
-            padding: 12px;
-            background: #f1f3f4;
+            padding: 16px;
+            background: #ffffff;
             border-radius: 8px;
-            font-size: 15px;
-            line-height: 1.5;
+            font-size: 18px; /* 文字を大きく */
+            line-height: 1.6; /* 行間を広げて読みやすく */
+            color: #111111; /* 完全にハッキリした黒文字に固定 */
             box-sizing: border-box;
             white-space: pre-wrap;
-            border: 1px solid #dadce0;
+            border: 2px solid #9aa0a6;
         }
 
         .placeholder-text {
             color: #70757a;
             font-style: italic;
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>1分間英語スピーチトレーナー</h1>
+    <h1>1分間英語スピーチトレーナー (文字消え対策版)</h1>
     
     <div id="timerCircle" class="timer-circle">
         <div id="timerDisplay" class="timer-display">01:00</div>
@@ -174,40 +172,39 @@
     </div>
 
     <button id="startBtn" class="btn btn-start">スピーチを開始する (Start)</button>
-    <button id="stopBtn" class="btn btn-stop">途中で終了する (Stop)</button>
+    <button id="stopBtn" class="btn btn-stop">スピーチを終了する (Stop)</button>
 
-    <!-- 録音再生セクション -->
     <div id="audioSection" class="audio-section">
         <h3>録音された音声 (Playback):</h3>
         <audio id="audioPlayer" controls></audio>
     </div>
 
-    <!-- 文字起こしセクション -->
     <div class="transcript-section">
         <h3>文字起こし結果 (English Transcript):</h3>
         <div id="transcriptBox" class="transcript-box">
-            <span class="placeholder-text">ここにあなたのスピーチした英語がリアルタイムで文字起こしされます...</span>
+            <span class="placeholder-text">ここにあなたのスピーチした英語がリアルタイムで記録・消えずに蓄積されます...</span>
         </div>
     </div>
 </div>
 
 <script>
     let countdownInterval = null;
-    let timeLeft = 60; // 1分間 (60秒)
+    let timeLeft = 60; 
 
-    // 録音関連の変数
     let mediaRecorder = null;
     let audioChunks = [];
 
-    // 音声認識（文字起こし）関連の変数
+    // 確定したテキストを蓄積・キープしておくための変数
+    let finalTranscriptHistory = ""; 
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
 
     if (SpeechRecognition) {
         recognition = new SpeechRecognition();
-        recognition.continuous = true;       // 途切れても録音を続ける
-        recognition.interimResults = true;    // 途中の経過も表示する
-        recognition.lang = 'en-US';           // 英語（米国）に設定
+        recognition.continuous = true;       
+        recognition.interimResults = true;    
+        recognition.lang = 'en-US';           
     }
 
     const timerDisplay = document.getElementById('timerDisplay');
@@ -219,7 +216,6 @@
     const audioPlayer = document.getElementById('audioPlayer');
     const transcriptBox = document.getElementById('transcriptBox');
 
-    // 1分間のタイマーを管理する関数
     function startTimer() {
         timeLeft = 60;
         updateTimerDisplay();
@@ -230,7 +226,7 @@
             updateTimerDisplay();
 
             if (timeLeft <= 0) {
-                endSpeech(true); // 1分経ったら自動終了
+                endSpeech(true); 
             }
         }, 1000);
     }
@@ -241,9 +237,7 @@
         timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
-    // スピーチ（録音＆文字起こし）の開始
     startBtn.addEventListener('click', async () => {
-        // マイク権限の取得と録音の準備
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
@@ -258,19 +252,18 @@
                 const audioUrl = URL.createObjectURL(audioBlob);
                 audioPlayer.src = audioUrl;
                 audioSection.style.display = 'block';
-                
-                // マイクストリームを停止して解放
                 stream.getTracks().forEach(track => track.stop());
             };
 
-            // UI切り替え
+            // スタート時に記録用変数をリセット
+            finalTranscriptHistory = "";
+
             startBtn.style.display = 'none';
             stopBtn.style.display = 'block';
             statusBadge.textContent = '録音＆文字起こし中...';
             statusBadge.classList.add('recording');
-            transcriptBox.innerHTML = ''; // ボックスをクリア
+            transcriptBox.innerHTML = ''; 
 
-            // 録音と文字起こしのスタート
             mediaRecorder.start();
             if (recognition) {
                 recognition.start();
@@ -281,29 +274,42 @@
             startTimer();
 
         } catch (err) {
-            alert('マイクのアクセスが拒否されたか、マイクが見つかりません。設定を確認してください。');
+            alert('マイクのアクセスが拒否されたか、マイクが見つかりません。');
             console.error(err);
         }
     });
 
-    // 文字起こしのリアルタイム処理
+    // 改良した文字起こしエンジン
     if (recognition) {
         recognition.onresult = (event) => {
             let interimTranscript = '';
-            let finalTranscript = '';
+            let currentSessionFinal = '';
 
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript + ' ';
+                    currentSessionFinal += event.results[i].transcript + ' ';
                 } else {
-                    interimTranscript += event.results[i][0].transcript;
+                    interimTranscript += event.results[i].transcript;
                 }
             }
-            // 画面に文字起こし結果を反映
-            transcriptBox.innerHTML = `<strong>${finalTranscript}</strong><span style="color: #70757a;">${interimTranscript}</span>`;
+
+            // 確定したテキストは今までの履歴(finalTranscriptHistory)にどんどん追加
+            if (currentSessionFinal !== "") {
+                finalTranscriptHistory += currentSessionFinal;
+            }
+
+            // 過去のすべての確定テキスト(黒) ＋ 今話している最中のテキスト(薄いグレー)を表示
+            // これにより、通信の瞬きで文字がリセットされて消えるのを完全に防ぎます
+            transcriptBox.innerHTML = `<span style="color: #111111; font-weight: bold;">${finalTranscriptHistory}</span><span style="color: #70757a;">${interimTranscript}</span>`;
             
-            // 常に最下部まで自動スクロール
             transcriptBox.scrollTop = transcriptBox.scrollHeight;
+        };
+
+        // ブラウザ側で音声認識が勝手に途切れた場合は自動で再スタートさせる処理を追加
+        recognition.onend = () => {
+            if (timeLeft > 0 && startBtn.style.display === 'none') {
+                recognition.start();
+            }
         };
 
         recognition.onerror = (event) => {
@@ -311,7 +317,6 @@
         };
     }
 
-    // スピーチの終了処理
     stopBtn.addEventListener('click', () => {
         endSpeech(false);
     });
@@ -320,22 +325,7 @@
         clearInterval(countdownInterval);
         timerCircle.classList.remove('active');
 
-        // 録音と文字起こしの停止
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
         }
         if (recognition) {
-            recognition.stop();
-        }
-
-        // UIの復元
-        stopBtn.style.display = 'none';
-        startBtn.style.display = 'block';
-        startBtn.textContent = 'もう一度挑戦する (Restart)';
-        
-        statusBadge.classList.remove('recording');
-        statusBadge.textContent = isTimeUp ? 'タイムアップ！終了しました' : '途中で停止しました';
-    }
-</script>
-
-</body>

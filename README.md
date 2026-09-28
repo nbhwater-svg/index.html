@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>改修版：1分間英語スピーチトレーナー</title>
+    <title>完全修正版：1分間英語スピーチトレーナー</title>
     <style>
         :root {
             --primary: #1a73e8;
@@ -11,7 +11,7 @@
             --success: #188038;
             --bg: #f8f9fa;
             --card: #ffffff;
-            --text: #111111; /* 文字色をハッキリとした濃い黒に変更 */
+            --text: #111111;
         }
 
         body {
@@ -135,17 +135,16 @@
             color: #5f6368;
         }
 
-        /* 文字表示エリアの改善（見やすさ重視） */
         .transcript-box {
             width: 100%;
-            height: 240px; /* ボックスを広げて見やすく */
+            height: 240px;
             overflow-y: auto;
             padding: 16px;
             background: #ffffff;
             border-radius: 8px;
-            font-size: 18px; /* 文字を大きく */
-            line-height: 1.6; /* 行間を広げて読みやすく */
-            color: #111111; /* 完全にハッキリした黒文字に固定 */
+            font-size: 18px;
+            line-height: 1.6;
+            color: #111111;
             box-sizing: border-box;
             white-space: pre-wrap;
             border: 2px solid #9aa0a6;
@@ -161,14 +160,14 @@
 <body>
 
 <div class="container">
-    <h1>1分間英語スピーチトレーナー (文字消え対策版)</h1>
+    <h1>1分間英語スピーチトレーナー (起動バグ修正版)</h1>
     
     <div id="timerCircle" class="timer-circle">
         <div id="timerDisplay" class="timer-display">01:00</div>
     </div>
 
     <div>
-        <div id="statusBadge" class="status-badge">準備完了</div>
+        <div id="statusBadge" class="status-badge">マイクの準備中...</div>
     </div>
 
     <button id="startBtn" class="btn btn-start">スピーチを開始する (Start)</button>
@@ -182,7 +181,7 @@
     <div class="transcript-section">
         <h3>文字起こし結果 (English Transcript):</h3>
         <div id="transcriptBox" class="transcript-box">
-            <span class="placeholder-text">ここにあなたのスピーチした英語がリアルタイムで記録・消えずに蓄積されます...</span>
+            <span class="placeholder-text">マイクの許可が出ると、ここにリアルタイムで英語が蓄積されます...</span>
         </div>
     </div>
 </div>
@@ -193,8 +192,7 @@
 
     let mediaRecorder = null;
     let audioChunks = [];
-
-    // 確定したテキストを蓄積・キープしておくための変数
+    let localStream = null;
     let finalTranscriptHistory = ""; 
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -215,6 +213,39 @@
     const audioSection = document.getElementById('audioSection');
     const audioPlayer = document.getElementById('audioPlayer');
     const transcriptBox = document.getElementById('transcriptBox');
+
+    // 【修正の要】アプリ起動時にあらかじめマイクの接続を確立させておく関数
+    async function initUserMedia() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(localStream);
+            
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                audioPlayer.src = audioUrl;
+                audioSection.style.display = 'block';
+            };
+
+            statusBadge.textContent = '準備完了 (Startを押せます)';
+            transcriptBox.innerHTML = '<span class="placeholder-text">スタートボタンを押してスピーチを開始してください。</span>';
+        } catch (err) {
+            statusBadge.textContent = 'マイクエラー';
+            statusBadge.style.background = '#fce8e6';
+            statusBadge.style.color = 'var(--accent)';
+            transcriptBox.innerHTML = '<span class="placeholder-text" style="color:red; font-style:normal;">【重要】マイクへのアクセスが許可されていないか、マイクが見つかりません。ブラウザの鍵マークなどからマイクの使用を「許可」にしてください。</span>';
+            console.error(err);
+        }
+    }
+
+    // ページが開かれたら自動でマイク準備を開始
+    window.addEventListener('DOMContentLoaded', initUserMedia);
 
     function startTimer() {
         timeLeft = 60;
@@ -237,49 +268,44 @@
         timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
+    // スタートボタンをクリックした時の処理（バグを排除して確実に起動）
     startBtn.addEventListener('click', async () => {
+        // もし何らかの理由で事前にマイクが組めていなければ、再度ここで直結
+        if (!mediaRecorder || mediaRecorder.state === 'inactive' && audioChunks.length > 0) {
+            await initUserMedia();
+        }
+
+        if (!localStream) {
+            alert('マイクが有効になっていません。画面の指示に従って許可してください。');
+            return;
+        }
+
+        // 状態のリセットとUI切り替え
+        audioChunks = [];
+        finalTranscriptHistory = "";
+        transcriptBox.innerHTML = ""; 
+        
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'block';
+        statusBadge.textContent = '録音＆文字起こし中...';
+        statusBadge.classList.add('recording');
+
+        // 確実に録音と音声認識を同時トリガー
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                audioPlayer.src = audioUrl;
-                audioSection.style.display = 'block';
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            // スタート時に記録用変数をリセット
-            finalTranscriptHistory = "";
-
-            startBtn.style.display = 'none';
-            stopBtn.style.display = 'block';
-            statusBadge.textContent = '録音＆文字起こし中...';
-            statusBadge.classList.add('recording');
-            transcriptBox.innerHTML = ''; 
-
-            mediaRecorder.start();
+            mediaRecorder.start(200); // 200msごとにデータを細かくセーブ
             if (recognition) {
                 recognition.start();
             } else {
-                transcriptBox.innerHTML = '<span class="placeholder-text" style="color:red;">お使いのブラウザは文字起こしに対応していません。(PCのGoogle Chromeを推奨します)</span>';
+                transcriptBox.innerHTML = '<span class="placeholder-text" style="color:red;">音声認識に対応していません。(PCのChromeを推奨します)</span>';
             }
-
             startTimer();
-
-        } catch (err) {
-            alert('マイクのアクセスが拒否されたか、マイクが見つかりません。');
-            console.error(err);
+        } catch (e) {
+            console.error("スタート処理に失敗しました:", e);
+            // 万が一のセーフティ：一度初期化し直す
+            initUserMedia();
         }
     });
 
-    // 改良した文字起こしエンジン
     if (recognition) {
         recognition.onresult = (event) => {
             let interimTranscript = '';
@@ -293,39 +319,6 @@
                 }
             }
 
-            // 確定したテキストは今までの履歴(finalTranscriptHistory)にどんどん追加
             if (currentSessionFinal !== "") {
                 finalTranscriptHistory += currentSessionFinal;
             }
-
-            // 過去のすべての確定テキスト(黒) ＋ 今話している最中のテキスト(薄いグレー)を表示
-            // これにより、通信の瞬きで文字がリセットされて消えるのを完全に防ぎます
-            transcriptBox.innerHTML = `<span style="color: #111111; font-weight: bold;">${finalTranscriptHistory}</span><span style="color: #70757a;">${interimTranscript}</span>`;
-            
-            transcriptBox.scrollTop = transcriptBox.scrollHeight;
-        };
-
-        // ブラウザ側で音声認識が勝手に途切れた場合は自動で再スタートさせる処理を追加
-        recognition.onend = () => {
-            if (timeLeft > 0 && startBtn.style.display === 'none') {
-                recognition.start();
-            }
-        };
-
-        recognition.onerror = (event) => {
-            console.error('Speech recognition error', event.error);
-        };
-    }
-
-    stopBtn.addEventListener('click', () => {
-        endSpeech(false);
-    });
-
-    function endSpeech(isTimeUp) {
-        clearInterval(countdownInterval);
-        timerCircle.classList.remove('active');
-
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
-        if (recognition) {
